@@ -223,6 +223,11 @@ class FlasherFrame(wx.Frame):
         menubar.Append(view_menu, "View")
 
         help_menu = wx.Menu()
+        usage_item = help_menu.Append(wx.ID_ANY, "Usage Guide")
+        self.Bind(wx.EVT_MENU, self.on_usage_guide, usage_item)
+        github_item = help_menu.Append(wx.ID_ANY, "GitHub Repository")
+        self.Bind(wx.EVT_MENU, self.on_github, github_item)
+        help_menu.AppendSeparator()
         about_item = help_menu.Append(wx.ID_ABOUT, "About")
         self.Bind(wx.EVT_MENU, self.on_about, about_item)
         menubar.Append(help_menu, "Help")
@@ -304,19 +309,6 @@ class FlasherFrame(wx.Frame):
         self.flash_btn.Bind(wx.EVT_BUTTON, self.on_flash)
         btn_sizer.Add(self.flash_btn, 0)
         sizer.Add(btn_sizer, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
-
-        # Footer
-        VERSION = "26.03.1"
-        footer_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        footer_label = wx.StaticText(panel, label=f"FlintWave Radio Tools  v{VERSION}  —  ")
-        footer_label.SetForegroundColour(wx.Colour(140, 140, 140))
-        footer_label.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        footer_sizer.Add(footer_label, 0, wx.ALIGN_CENTER_VERTICAL)
-        footer_link = wx.adv.HyperlinkCtrl(panel, label="github.com/FlintWave/btech-flasher",
-                                           url="https://github.com/FlintWave/btech-flasher")
-        footer_link.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        footer_sizer.Add(footer_link, 0, wx.ALIGN_CENTER_VERTICAL)
-        sizer.Add(footer_sizer, 0, wx.ALIGN_CENTER | wx.BOTTOM, 8)
 
         panel.SetSizer(sizer)
         self.Centre()
@@ -465,6 +457,16 @@ class FlasherFrame(wx.Frame):
         panel.Refresh()
         for child in panel.GetChildren():
             child.Refresh()
+
+    def on_usage_guide(self, event):
+        guide_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "USAGE.md")
+        if os.path.exists(guide_path):
+            wx.LaunchDefaultBrowser("file://" + guide_path)
+        else:
+            wx.LaunchDefaultBrowser("https://github.com/FlintWave/btech-flasher/blob/master/USAGE.md")
+
+    def on_github(self, event):
+        wx.LaunchDefaultBrowser("https://github.com/FlintWave/btech-flasher")
 
     def _apply_gtk_css(self, palette):
         """Apply theme colors to GTK native widgets via CSS."""
