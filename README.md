@@ -1,43 +1,75 @@
-# BTECH BF-F8HP Pro Firmware Flasher
+# KDH Bootloader Firmware Flasher
 
-A native Linux tool for flashing `.kdhx` firmware files to the BTECH BF-F8HP Pro handheld radio, eliminating the need for Wine or a Windows VM.
+A cross-platform tool for flashing `.kdhx` firmware files to BTECH, Baofeng, Radtel, and other radios that use the KDH bootloader — no Wine or Windows VM needed.
+
+Maintained by [FlintWave Radio Tools](https://github.com/FlintWave). Contact: flintwave@tuta.com
 
 ## Status
 
-**Untested** — this tool was developed against a unit with a faulty programming cable (broken RX line). The protocol implementation has been verified via dry-run packet construction and CRC validation, but has not yet been tested against a live radio with a working cable. Use at your own risk.
+**Untested** — the protocol implementation has been verified via dry-run packet construction and CRC validation, but has not yet been confirmed on hardware due to a faulty programming cable. Community testing reports welcome — please open an issue.
+
+## Supported Radios
+
+| Radio | Manufacturer | Tested |
+|-------|-------------|--------|
+| BF-F8HP Pro | BTECH | No |
+| UV-25 Plus / UV-25 Pro | Baofeng | No |
+| UV-17 Pro | Baofeng | No |
+| UV-18 Pro | Baofeng | No |
+| UV-21 Pro | Baofeng | No |
+| RT-470 | Radtel | No |
+| RT-490 | Radtel | No |
+| JC-8629 | JJCC | No |
+
+Radio definitions live in `radios.json` — community contributions welcome via PR.
 
 ## Requirements
 
 - Python 3.10+
 - [pyserial](https://pypi.org/project/pyserial/) (`pip install pyserial`)
-- A BTECH PC03 FTDI programming cable (or compatible K1 2-pin Kenwood cable)
-- Your user must be in the `dialout` group for serial port access:
+- [wxPython](https://pypi.org/project/wxPython/) (for the GUI; `pip install wxPython` or install via your distro's package manager)
+- [requests](https://pypi.org/project/requests/) (for firmware download; `pip install requests`)
+- A compatible FTDI programming cable (BTECH PC03 or similar K1 2-pin Kenwood cable)
+- Linux/macOS: your user must be in the `dialout` group:
   ```
   sudo usermod -aG dialout $USER
   ```
 
 ## Usage
 
-### Flash firmware
+### GUI
 
-1. Download the firmware bundle from [baofengtech.com](https://baofengtech.com) (includes the `.kdhx` file)
+```
+python3 flash_firmware_gui.py
+```
+
+Features:
+- Radio model selector with firmware download
+- Port finder wizard with auto-detection of PC03 cables
+- Dry run mode (verify firmware without flashing)
+- Serial diagnostics
+- Auto-update from GitHub on launch
+
+### CLI: Flash firmware
+
+1. Download the firmware bundle from your radio's manufacturer (or use the GUI's download button)
 2. Put the radio in bootloader mode:
    - Power off the radio
-   - Hold **SK1** (top side button) + **SK2** (bottom side button) — not PTT
-   - While holding both, turn the power/volume knob to power on
+   - Hold the bootloader keys (see `radios.json` for your model — e.g., SK1+SK2 for BF-F8HP Pro)
+   - While holding, turn the power/volume knob to power on
    - Screen stays blank, green Rx LED lights up
 3. Run:
    ```
-   python3 flash_firmware.py /dev/ttyUSB0 BTECH_V0.53_260116.kdhx
+   python3 flash_firmware.py /dev/ttyUSB0 firmware.kdhx
    ```
 
-### Dry run (verify packets without a radio)
+### CLI: Dry run
 
 ```
-python3 flash_firmware.py --dry-run none BTECH_V0.53_260116.kdhx
+python3 flash_firmware.py --dry-run none firmware.kdhx
 ```
 
-### Diagnostics (test serial communication)
+### CLI: Diagnostics
 
 ```
 python3 flash_firmware.py --diag /dev/ttyUSB0
@@ -45,7 +77,7 @@ python3 flash_firmware.py --diag /dev/ttyUSB0
 
 ## Protocol
 
-The BTECH bootloader uses a simple packetized serial protocol at 115200 baud (8N1).
+The KDH bootloader uses a packetized serial protocol at 115200 baud (8N1).
 
 ### Packet format
 
@@ -57,13 +89,13 @@ The BTECH bootloader uses a simple packetized serial protocol at 115200 baud (8N
 - **cmd** — command byte
 - **seed** — sequence number / argument
 - **lenH:lenL** — data length (big-endian 16-bit)
-- **data** — payload (0 to 65535 bytes)
+- **data** — payload
 - **crcH:crcL** — CRC-16/CCITT over cmd+seed+len+data (poly 0x1021, init 0x0000)
 - **0xEF** — trailer
 
 ### Manual download sequence
 
-When the radio is already in bootloader mode (user held SK1+SK2 during power on):
+When the radio is already in bootloader mode:
 
 | Step | Command | Byte | Payload |
 |------|---------|------|---------|
@@ -83,6 +115,12 @@ Each command expects an ACK response: same packet format with `cmdArgs = 0x06`.
 | 0xE3 | Incorrect address error (fatal) |
 | 0xE4 | Flash write error (fatal) |
 | 0xE5 | Command error (fatal) |
+
+## Contributing
+
+- **Test reports** — if you successfully flash a radio, open an issue so we can mark it as tested
+- **New radios** — add your radio to `radios.json` and submit a PR
+- **Bug fixes** — always welcome
 
 ## License
 

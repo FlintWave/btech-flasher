@@ -7,7 +7,7 @@ import os
 import subprocess
 
 REPO_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_URL = "https://github.com/ErikChevalier/btech-flasher"
+REPO_URL = "https://github.com/FlintWave/btech-flasher"
 
 
 def get_local_commit():
