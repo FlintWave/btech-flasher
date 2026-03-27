@@ -1,19 +1,171 @@
 #!/usr/bin/env python3
 """
 GUI frontend for the BTECH BF-F8HP Pro firmware flasher.
+Cross-platform: works on Linux, macOS, and Windows.
 """
 
 import threading
-import glob
 import wx
 import flash_firmware as fw
 import serial
+import serial.tools.list_ports
+
+# Known USB VID:PID pairs for compatible programming cables
+KNOWN_CABLES = {
+    (0x0403, 0x6015): "FTDI FT231X (PC03)",
+    (0x0403, 0x6001): "FTDI FT232R",
+    (0x0403, 0x6010): "FTDI FT2232",
+    (0x0403, 0x6014): "FTDI FT232H",
+    (0x067B, 0x2303): "Prolific PL2303",
+    (0x067B, 0x23A3): "Prolific PL2303GS",
+    (0x1A86, 0x7523): "CH340",
+    (0x1A86, 0x55D4): "CH9102",
+    (0x10C4, 0xEA60): "CP2102",
+}
+
+FTDI_VID_PID = (0x0403, 0x6015)  # PC03 cable
+
+
+def list_serial_ports():
+    """List serial ports with descriptions. Cross-platform."""
+    ports = []
+    for p in serial.tools.list_ports.comports():
+        vid_pid = (p.vid, p.pid) if p.vid and p.pid else None
+        cable = KNOWN_CABLES.get(vid_pid, "")
+        if cable:
+            label = f"{p.device} - {cable} [{p.serial_number or ''}]"
+        elif p.description and p.description != "n/a":
+            label = f"{p.device} - {p.description}"
+        else:
+            label = p.device
+        ports.append((p.device, label.strip(), vid_pid))
+    return ports
+
+
+def find_programming_cable():
+    """Auto-detect the BTECH PC03 cable or other FTDI cables."""
+    ports = list_serial_ports()
+    # Prefer exact PC03 match
+    for device, label, vid_pid in ports:
+        if vid_pid == FTDI_VID_PID:
+            return device, label
+    # Fall back to any known cable
+    for device, label, vid_pid in ports:
+        if vid_pid in KNOWN_CABLES:
+            return device, label
+    return None, None
+
+
+class PortFinderDialog(wx.Dialog):
+    """Port finder wizard that scans for serial devices."""
+
+    def __init__(self, parent):
+        super().__init__(parent, title="Find Programming Cable", size=(520, 370))
+        self.SetMinSize((520, 370))
+        self.selected_port = None
+
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        sizer.Add(wx.StaticText(self, label="Detected serial devices:"),
+                  0, wx.LEFT | wx.TOP, 10)
+        sizer.AddSpacer(5)
+
+        self.port_list = wx.ListCtrl(self, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
+        self.port_list.InsertColumn(0, "Port", width=120)
+        self.port_list.InsertColumn(1, "Cable / Chip", width=160)
+        self.port_list.InsertColumn(2, "Serial #", width=100)
+        self.port_list.InsertColumn(3, "USB ID", width=90)
+        self.port_list.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_select)
+        self.port_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_double_click)
+        sizer.Add(self.port_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+
+        sizer.AddSpacer(5)
+
+        self.status_text = wx.StaticText(self, label="")
+        sizer.Add(self.status_text, 0, wx.LEFT | wx.RIGHT, 10)
+
+        sizer.AddSpacer(5)
+
+        # Tip
+        tip = wx.StaticText(self, label=(
+            "Tip: If your cable isn't listed, unplug it, click Rescan, plug it back\n"
+            "in, then click Rescan again. The new entry is your cable."
+        ))
+        tip.SetForegroundColour(wx.Colour(100, 100, 100))
+        sizer.Add(tip, 0, wx.LEFT | wx.RIGHT, 10)
+
+        sizer.AddSpacer(10)
+
+        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        rescan_btn = wx.Button(self, label="Rescan")
+        rescan_btn.Bind(wx.EVT_BUTTON, self.on_rescan)
+        btn_sizer.Add(rescan_btn, 0, wx.RIGHT, 10)
+        self.select_btn = wx.Button(self, wx.ID_OK, label="Use Selected")
+        self.select_btn.Enable(False)
+        btn_sizer.Add(self.select_btn, 0, wx.RIGHT, 10)
+        cancel_btn = wx.Button(self, wx.ID_CANCEL, label="Cancel")
+        btn_sizer.Add(cancel_btn, 0)
+        sizer.Add(btn_sizer, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+
+        self.SetSizer(sizer)
+        self.scan_ports()
+        self.Centre()
+
+    def scan_ports(self):
+        self.port_list.DeleteAllItems()
+        self.ports = []
+        auto_select = -1
+
+        for p in serial.tools.list_ports.comports():
+            vid_pid = (p.vid, p.pid) if p.vid and p.pid else None
+            cable = KNOWN_CABLES.get(vid_pid, "")
+            usb_id = f"{p.vid:04X}:{p.pid:04X}" if p.vid and p.pid else ""
+            sn = p.serial_number or ""
+
+            idx = self.port_list.InsertItem(self.port_list.GetItemCount(), p.device)
+            self.port_list.SetItem(idx, 1, cable or p.description or "")
+            self.port_list.SetItem(idx, 2, sn)
+            self.port_list.SetItem(idx, 3, usb_id)
+            self.ports.append(p.device)
+
+            if vid_pid == FTDI_VID_PID:
+                auto_select = idx
+                self.port_list.SetItemBackgroundColour(idx, wx.Colour(220, 255, 220))
+
+        if auto_select >= 0:
+            self.port_list.Select(auto_select)
+            self.port_list.Focus(auto_select)
+            self.status_text.SetLabel("PC03 cable detected (highlighted in green)")
+            self.status_text.SetForegroundColour(wx.Colour(0, 128, 0))
+        elif self.ports:
+            self.status_text.SetLabel(f"{len(self.ports)} port(s) found")
+            self.status_text.SetForegroundColour(wx.Colour(0, 0, 0))
+        else:
+            self.status_text.SetLabel("No serial ports detected. Is the cable plugged in?")
+            self.status_text.SetForegroundColour(wx.Colour(200, 0, 0))
+
+    def on_rescan(self, event):
+        self.select_btn.Enable(False)
+        self.selected_port = None
+        self.scan_ports()
+
+    def on_select(self, event):
+        idx = event.GetIndex()
+        if 0 <= idx < len(self.ports):
+            self.selected_port = self.ports[idx]
+            self.select_btn.Enable(True)
+
+    def on_double_click(self, event):
+        idx = event.GetIndex()
+        if 0 <= idx < len(self.ports):
+            self.selected_port = self.ports[idx]
+            self.EndModal(wx.ID_OK)
 
 
 class FlasherFrame(wx.Frame):
     def __init__(self):
-        super().__init__(None, title="BTECH BF-F8HP Pro Firmware Flasher", size=(500, 380))
-        self.SetMinSize((500, 380))
+        super().__init__(None, title="BTECH BF-F8HP Pro Firmware Flasher", size=(520, 420))
+        self.SetMinSize((520, 420))
 
         panel = wx.Panel(self)
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -32,11 +184,10 @@ class FlasherFrame(wx.Frame):
         port_sizer = wx.BoxSizer(wx.HORIZONTAL)
         port_sizer.Add(wx.StaticText(panel, label="Port:"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
         self.port_combo = wx.ComboBox(panel, style=wx.CB_DROPDOWN)
-        self.refresh_ports()
         port_sizer.Add(self.port_combo, 1, wx.EXPAND | wx.RIGHT, 5)
-        refresh_btn = wx.Button(panel, label="Refresh")
-        refresh_btn.Bind(wx.EVT_BUTTON, self.on_refresh)
-        port_sizer.Add(refresh_btn, 0)
+        find_btn = wx.Button(panel, label="Find Cable...")
+        find_btn.Bind(wx.EVT_BUTTON, self.on_find_cable)
+        port_sizer.Add(find_btn, 0)
         sizer.Add(port_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
 
         sizer.AddSpacer(10)
@@ -67,17 +218,39 @@ class FlasherFrame(wx.Frame):
         panel.SetSizer(sizer)
         self.Centre()
 
-    def refresh_ports(self):
-        ports = sorted(glob.glob("/dev/ttyUSB*") + glob.glob("/dev/ttyACM*"))
-        self.port_combo.Set(ports)
-        if ports:
+        # Auto-detect cable on startup
+        self._auto_detect_port()
+
+    def _auto_detect_port(self):
+        ports = list_serial_ports()
+        port_devices = [p[0] for p in ports]
+        port_labels = [p[1] for p in ports]
+        self.port_combo.Set(port_devices)
+
+        device, label = find_programming_cable()
+        if device and device in port_devices:
+            self.port_combo.SetSelection(port_devices.index(device))
+            self.log.AppendText(f"Auto-detected: {label}\n")
+        elif port_devices:
             self.port_combo.SetSelection(0)
 
-    def on_refresh(self, event):
-        self.refresh_ports()
+    def on_find_cable(self, event):
+        dlg = PortFinderDialog(self)
+        if dlg.ShowModal() == wx.ID_OK and dlg.selected_port:
+            port = dlg.selected_port
+            # Update combo
+            ports = [p[0] for p in list_serial_ports()]
+            self.port_combo.Set(ports)
+            if port in ports:
+                self.port_combo.SetSelection(ports.index(port))
+            else:
+                self.port_combo.SetValue(port)
+            self.log.AppendText(f"Selected: {port}\n")
+        dlg.Destroy()
 
     def on_browse(self, event):
-        dlg = wx.FileDialog(self, "Select firmware file", wildcard="Firmware files (*.kdhx)|*.kdhx|All files (*)|*",
+        dlg = wx.FileDialog(self, "Select firmware file",
+                            wildcard="Firmware files (*.kdhx)|*.kdhx|All files (*)|*",
                             style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
         if dlg.ShowModal() == wx.ID_OK:
             self.file_path.SetValue(dlg.GetPath())
@@ -98,7 +271,8 @@ class FlasherFrame(wx.Frame):
         firmware_path = self.file_path.GetValue()
 
         if not port:
-            wx.MessageBox("Select a serial port.", "Error", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox("Select a serial port.\nClick 'Find Cable...' to detect your programming cable.",
+                          "Error", wx.OK | wx.ICON_ERROR)
             return
         if not firmware_path:
             wx.MessageBox("Select a firmware file.", "Error", wx.OK | wx.ICON_ERROR)
@@ -129,6 +303,7 @@ class FlasherFrame(wx.Frame):
                 firmware = f.read()
 
             import math
+            import time
             fw_size = len(firmware)
             total_chunks = math.ceil(fw_size / 1024)
             self.log_msg(f"Firmware: {firmware_path}")
@@ -143,7 +318,6 @@ class FlasherFrame(wx.Frame):
             )
             ser.dtr = True
             ser.rts = True
-            import time
             time.sleep(0.1)
             ser.reset_input_buffer()
             ser.reset_output_buffer()
@@ -183,7 +357,8 @@ class FlasherFrame(wx.Frame):
     def on_diag(self, event):
         port = self.port_combo.GetValue()
         if not port:
-            wx.MessageBox("Select a serial port.", "Error", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox("Select a serial port.\nClick 'Find Cable...' to detect your programming cable.",
+                          "Error", wx.OK | wx.ICON_ERROR)
             return
 
         self.log.Clear()
