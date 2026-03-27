@@ -5,10 +5,12 @@ Supports BTECH, Baofeng, Radtel, and other KDH-based radios.
 Cross-platform: works on Linux, macOS, and Windows.
 """
 
+import os
 import threading
 import wx
 import flash_firmware as fw
 import firmware_download as dl
+import updater
 import serial
 import serial.tools.list_ports
 
@@ -250,6 +252,9 @@ class FlasherFrame(wx.Frame):
         # Auto-detect cable on startup
         self._auto_detect_port()
 
+        # Check for updates in background
+        threading.Thread(target=self._check_update, daemon=True).start()
+
     def _auto_detect_port(self):
         ports = list_serial_ports()
         port_devices = [p[0] for p in ports]
@@ -262,6 +267,36 @@ class FlasherFrame(wx.Frame):
             self.log.AppendText(f"Auto-detected: {label}\n")
         elif port_devices:
             self.port_combo.SetSelection(0)
+
+    def _check_update(self):
+        try:
+            has_update, local_sha, remote_sha = updater.check_for_update()
+            if has_update:
+                wx.CallAfter(self._prompt_update, local_sha, remote_sha)
+        except Exception:
+            pass
+
+    def _prompt_update(self, local_sha, remote_sha):
+        dlg = wx.MessageDialog(self,
+            f"A newer version is available on GitHub.\n\n"
+            f"Local:  {local_sha[:10]}\n"
+            f"Remote: {remote_sha[:10]}\n\n"
+            "Update now? (the app will restart)",
+            "Update Available", wx.YES_NO | wx.ICON_INFORMATION)
+        if dlg.ShowModal() == wx.ID_YES:
+            success, msg = updater.apply_update()
+            if success:
+                wx.MessageBox(
+                    "Updated successfully. The app will now restart.",
+                    "Updated", wx.OK | wx.ICON_INFORMATION)
+                self._restart()
+            else:
+                wx.MessageBox(f"Update failed:\n{msg}", "Error", wx.OK | wx.ICON_ERROR)
+        dlg.Destroy()
+
+    def _restart(self):
+        import sys
+        os.execv(sys.executable, [sys.executable] + sys.argv)
 
     def _get_selected_radio(self):
         idx = self.radio_combo.GetSelection()
