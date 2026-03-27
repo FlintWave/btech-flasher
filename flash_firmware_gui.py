@@ -569,7 +569,9 @@ class FlasherFrame(wx.Frame):
             "SOFTWARE."
         )
         info = wx.adv.AboutDialogInfo()
-        info.SetName("KDH Bootloader Firmware Flasher")
+        # Use a stock icon to avoid the broken red cross from missing app icon
+        info.SetIcon(wx.ArtProvider.GetIcon(wx.ART_INFORMATION, wx.ART_OTHER, (64, 64)))
+        info.SetName("\U0001f4fb KDH Bootloader Firmware Flasher")
         info.SetVersion(VERSION)
         info.SetDescription(
             "Flash .kdhx firmware to BTECH, Baofeng, Radtel,\n"
