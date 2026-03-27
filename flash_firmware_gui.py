@@ -6,9 +6,22 @@ Cross-platform: works on Linux, macOS, and Windows.
 """
 
 import os
+import sys
 import threading
 import wx
 import wx.adv
+
+# GTK CSS theming for Linux — needed because native GTK widgets
+# (menu bar, dropdown arrows, popup lists) ignore wxPython color setters
+_gtk_available = False
+try:
+    if sys.platform.startswith("linux"):
+        import gi
+        gi.require_version("Gtk", "3.0")
+        from gi.repository import Gtk, Gdk
+        _gtk_available = True
+except (ImportError, ValueError):
+    pass
 import flash_firmware as fw
 import firmware_download as dl
 import updater
@@ -169,7 +182,7 @@ class PortFinderDialog(wx.Dialog):
 
 class FlasherFrame(wx.Frame):
     def __init__(self):
-        super().__init__(None, title="KDH Bootloader Firmware Flasher", size=(560, 500))
+        super().__init__(None, title="\U0001f4fb KDH Bootloader Firmware Flasher", size=(560, 500))
         self.SetMinSize((560, 500))
 
         self.font_size = 9
@@ -403,6 +416,7 @@ class FlasherFrame(wx.Frame):
             for child in panel.GetChildren():
                 child.SetOwnBackgroundColour(wx.NullColour)
                 child.SetOwnForegroundColour(wx.NullColour)
+            self._clear_gtk_css()
             panel.Refresh()
             for child in panel.GetChildren():
                 child.Refresh()
@@ -444,14 +458,116 @@ class FlasherFrame(wx.Frame):
         # Log gets green text for that terminal feel
         self.log.SetOwnForegroundColour(green)
 
+        # Apply GTK CSS for native widgets (menus, dropdowns, arrows)
+        if _gtk_available:
+            self._apply_gtk_css(themes[theme])
+
         panel.Refresh()
         for child in panel.GetChildren():
             child.Refresh()
 
+    def _apply_gtk_css(self, palette):
+        """Apply theme colors to GTK native widgets via CSS."""
+        base, surface0, mantle, text, subtext1, green, link = palette
+
+        def rgb(c):
+            return f"rgb({c[0]},{c[1]},{c[2]})"
+
+        css = f"""
+            menubar, menubar > menuitem {{
+                background-color: {rgb(base)};
+                color: {rgb(text)};
+            }}
+            menubar > menuitem:hover {{
+                background-color: {rgb(surface0)};
+            }}
+            menu, menu > menuitem {{
+                background-color: {rgb(surface0)};
+                color: {rgb(text)};
+            }}
+            menu > menuitem:hover {{
+                background-color: {rgb(link)};
+                color: {rgb(base)};
+            }}
+            combobox, combobox button, combobox arrow {{
+                background-color: {rgb(surface0)};
+                color: {rgb(text)};
+            }}
+            combobox window, combobox window * {{
+                background-color: {rgb(surface0)};
+                color: {rgb(text)};
+            }}
+            button {{
+                background-image: none;
+                background-color: {rgb(surface0)};
+                color: {rgb(text)};
+                border-color: {rgb(mantle)};
+            }}
+            button:hover {{
+                background-color: {rgb(link)};
+                color: {rgb(base)};
+            }}
+            entry, textview, textview text {{
+                background-color: {rgb(mantle)};
+                color: {rgb(text)};
+            }}
+            scrollbar {{
+                background-color: {rgb(base)};
+            }}
+            scrollbar slider {{
+                background-color: {rgb(surface0)};
+            }}
+        """
+
+        try:
+            provider = Gtk.CssProvider()
+            provider.load_from_data(css.encode())
+
+            screen = Gdk.Screen.get_default()
+            if not hasattr(self, '_gtk_css_provider'):
+                self._gtk_css_provider = None
+            if self._gtk_css_provider:
+                Gtk.StyleContext.remove_provider_for_screen(screen, self._gtk_css_provider)
+            Gtk.StyleContext.add_provider_for_screen(
+                screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            )
+            self._gtk_css_provider = provider
+        except Exception:
+            pass
+
+    def _clear_gtk_css(self):
+        """Remove custom GTK CSS to restore system theme."""
+        if _gtk_available and hasattr(self, '_gtk_css_provider') and self._gtk_css_provider:
+            try:
+                screen = Gdk.Screen.get_default()
+                Gtk.StyleContext.remove_provider_for_screen(screen, self._gtk_css_provider)
+                self._gtk_css_provider = None
+            except Exception:
+                pass
+
     def on_about(self, event):
         VERSION = "26.03.1"
+        mit_license = (
+            "MIT License\n\n"
+            "Copyright (c) 2026 FlintWave Radio Tools\n\n"
+            "Permission is hereby granted, free of charge, to any person obtaining a copy "
+            "of this software and associated documentation files (the \"Software\"), to deal "
+            "in the Software without restriction, including without limitation the rights "
+            "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell "
+            "copies of the Software, and to permit persons to whom the Software is "
+            "furnished to do so, subject to the following conditions:\n\n"
+            "The above copyright notice and this permission notice shall be included in all "
+            "copies or substantial portions of the Software.\n\n"
+            "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR "
+            "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, "
+            "FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE "
+            "AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER "
+            "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, "
+            "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE "
+            "SOFTWARE."
+        )
         info = wx.adv.AboutDialogInfo()
-        info.SetName("KDH Bootloader Firmware Flasher")
+        info.SetName("\U0001f4fb KDH Bootloader Firmware Flasher")
         info.SetVersion(VERSION)
         info.SetDescription(
             "Flash .kdhx firmware to BTECH, Baofeng, Radtel,\n"
@@ -459,7 +575,7 @@ class FlasherFrame(wx.Frame):
         )
         info.SetCopyright("(c) 2026 FlintWave Radio Tools")
         info.SetWebSite("https://github.com/FlintWave/btech-flasher")
-        info.SetLicence("MIT License")
+        info.SetLicence(mit_license)
         wx.adv.AboutBox(info)
 
     def _check_update(self):
