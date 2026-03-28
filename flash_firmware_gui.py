@@ -721,32 +721,42 @@ class FlasherFrame(wx.Frame):
 
     def _check_update(self):
         try:
-            has_update, local_sha, remote_sha = updater.check_for_update()
+            has_update, local_info, remote_info = updater.check_for_update()
             if has_update:
-                wx.CallAfter(self._prompt_update, local_sha, remote_sha)
+                wx.CallAfter(self._prompt_update, local_info, remote_info)
         except Exception:
             pass
 
-    def _prompt_update(self, local_sha, remote_sha):
-        dlg = wx.MessageDialog(self,
-            f"A newer version is available on GitHub.\n\n"
-            f"Local:  {local_sha[:10]}\n"
-            f"Remote: {remote_sha[:10]}\n\n"
-            "Update now? (the app will restart)",
-            "Update Available", wx.YES_NO | wx.ICON_INFORMATION)
-        if dlg.ShowModal() == wx.ID_YES:
-            success, msg = updater.apply_update()
-            if success:
-                wx.MessageBox(
-                    "Updated successfully. The app will now restart.",
-                    "Updated", wx.OK | wx.ICON_INFORMATION)
-                self._restart()
-            else:
-                wx.MessageBox(f"Update failed:\n{msg}", "Error", wx.OK | wx.ICON_ERROR)
-        dlg.Destroy()
+    def _prompt_update(self, local_info, remote_info):
+        if updater.is_git_install():
+            dlg = wx.MessageDialog(self,
+                f"A newer version is available.\n\n"
+                f"Local:  {local_info}\n"
+                f"Remote: {remote_info}\n\n"
+                "Update now? (the app will restart)",
+                "Update Available", wx.YES_NO | wx.ICON_INFORMATION)
+            if dlg.ShowModal() == wx.ID_YES:
+                success, msg = updater.apply_update()
+                if success:
+                    wx.MessageBox(
+                        "Updated successfully. The app will now restart.",
+                        "Updated", wx.OK | wx.ICON_INFORMATION)
+                    self._restart()
+                else:
+                    wx.MessageBox(f"Update failed:\n{msg}", "Error", wx.OK | wx.ICON_ERROR)
+            dlg.Destroy()
+        else:
+            dlg = wx.MessageDialog(self,
+                f"A newer version is available.\n\n"
+                f"Installed: {local_info}\n"
+                f"Latest:    {remote_info}\n\n"
+                "Open the downloads page?",
+                "Update Available", wx.YES_NO | wx.ICON_INFORMATION)
+            if dlg.ShowModal() == wx.ID_YES:
+                wx.LaunchDefaultBrowser(updater.get_releases_url())
+            dlg.Destroy()
 
     def _restart(self):
-        import sys
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
     def _get_selected_radio(self):
