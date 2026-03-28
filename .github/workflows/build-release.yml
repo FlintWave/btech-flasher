@@ -5,99 +5,191 @@ on:
     tags: ['v*']
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            name: Linux
-            artifact: FlintWave-KDH-Flasher-Linux
-          - os: windows-latest
-            name: Windows
-            artifact: FlintWave-KDH-Flasher-Windows
-          - os: macos-latest
-            name: macOS
-            artifact: FlintWave-KDH-Flasher-macOS
-
-    runs-on: ${{ matrix.os }}
+  build-linux:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install system dependencies (Linux)
-        if: runner.os == 'Linux'
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-wxgtk4.0 libfuse2
-
-      - name: Install Python dependencies
-        shell: bash
-        run: |
+          sudo apt-get install -y python3-wxgtk4.0 libfuse2 rpm
+          sudo gem install fpm
           python -m pip install --upgrade pip
           python -m pip install pyserial requests pyinstaller
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            python -m pip install --no-deps wxPython --prefer-binary || true
-            python -c "import wx; print(f'wxPython {wx.__version__}')" 2>/dev/null || \
-              echo "Using system wxPython"
-          else
-            python -m pip install wxPython --prefer-binary
-          fi
+          python -m pip install --no-deps wxPython --prefer-binary || true
 
       - name: Build binary
         run: pyinstaller build.spec
 
-      - name: Build AppImage (Linux)
-        if: runner.os == 'Linux'
-        shell: bash
+      - name: Build AppImage
         run: |
           mkdir -p AppDir/usr/bin AppDir/usr/share/icons/hicolor/128x128/apps AppDir/usr/share/applications
           cp dist/FlintWave-KDH-Flasher AppDir/usr/bin/
           cp icon_128.png AppDir/usr/share/icons/hicolor/128x128/apps/flintwave-kdh-flasher.png
           cp icon_128.png AppDir/flintwave-kdh-flasher.png
-          cat > AppDir/usr/share/applications/flintwave-kdh-flasher.desktop << 'DESKTOP'
+          cat > AppDir/flintwave-kdh-flasher.desktop << 'DESKTOP'
           [Desktop Entry]
           Type=Application
           Name=FlintWave KDH Flasher
+          GenericName=Radio Firmware Flasher
+          Comment=Flash firmware to KDH bootloader radios
           Exec=FlintWave-KDH-Flasher
           Icon=flintwave-kdh-flasher
           Categories=Utility;HamRadio;
+          Keywords=Hamradio;Firmware;Flasher;Baofeng;BTECH;Radio;
           DESKTOP
-          cp AppDir/usr/share/applications/flintwave-kdh-flasher.desktop AppDir/
+          cp AppDir/flintwave-kdh-flasher.desktop AppDir/usr/share/applications/
           ln -sf usr/bin/FlintWave-KDH-Flasher AppDir/AppRun
           curl -sL https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -o appimagetool
           chmod +x appimagetool
           ARCH=x86_64 ./appimagetool AppDir FlintWave-KDH-Flasher-x86_64.AppImage
 
-      - name: Upload artifact
+      - name: Build .deb
+        run: |
+          fpm -s dir -t deb \
+            --name flintwave-kdh-flasher \
+            --version "${{ github.ref_name }}" \
+            --description "Cross-platform firmware flasher for KDH bootloader radios" \
+            --maintainer "FlintWave Radio Tools <flintwave@tuta.com>" \
+            --url "https://github.com/FlintWave/flintwave-kdh-flasher" \
+            --license MIT \
+            --category utils \
+            --depends libgtk-3-0 \
+            dist/FlintWave-KDH-Flasher=/usr/bin/FlintWave-KDH-Flasher \
+            AppDir/flintwave-kdh-flasher.desktop=/usr/share/applications/flintwave-kdh-flasher.desktop \
+            icon_128.png=/usr/share/icons/hicolor/128x128/apps/flintwave-kdh-flasher.png
+
+      - name: Build .rpm
+        run: |
+          fpm -s dir -t rpm \
+            --name flintwave-kdh-flasher \
+            --version "${{ github.ref_name }}" \
+            --description "Cross-platform firmware flasher for KDH bootloader radios" \
+            --maintainer "FlintWave Radio Tools <flintwave@tuta.com>" \
+            --url "https://github.com/FlintWave/flintwave-kdh-flasher" \
+            --license MIT \
+            --category Utilities \
+            --depends gtk3 \
+            dist/FlintWave-KDH-Flasher=/usr/bin/FlintWave-KDH-Flasher \
+            AppDir/flintwave-kdh-flasher.desktop=/usr/share/applications/flintwave-kdh-flasher.desktop \
+            icon_128.png=/usr/share/icons/hicolor/128x128/apps/flintwave-kdh-flasher.png
+
+      - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
+          name: linux-packages
           path: |
+            FlintWave-KDH-Flasher-x86_64.AppImage
+            *.deb
+            *.rpm
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyserial requests pyinstaller wxPython --prefer-binary
+
+      - name: Build binary
+        run: pyinstaller build.spec
+
+      - name: Create Inno Setup script
+        shell: bash
+        run: |
+          cat > installer.iss << 'ISS'
+          [Setup]
+          AppName=FlintWave KDH Flasher
+          AppVersion=${{ github.ref_name }}
+          AppPublisher=FlintWave Radio Tools
+          AppPublisherURL=https://github.com/FlintWave/flintwave-kdh-flasher
+          DefaultDirName={autopf}\FlintWave KDH Flasher
+          DefaultGroupName=FlintWave KDH Flasher
+          OutputDir=.
+          OutputBaseFilename=FlintWave-KDH-Flasher-Setup
+          Compression=lzma
+          SolidCompression=yes
+          SetupIconFile=icon.ico
+
+          [Files]
+          Source: "dist\FlintWave-KDH-Flasher.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+          [Icons]
+          Name: "{group}\FlintWave KDH Flasher"; Filename: "{app}\FlintWave-KDH-Flasher.exe"
+          Name: "{group}\Uninstall FlintWave KDH Flasher"; Filename: "{uninstallexe}"
+          Name: "{commondesktop}\FlintWave KDH Flasher"; Filename: "{app}\FlintWave-KDH-Flasher.exe"
+
+          [Run]
+          Filename: "{app}\FlintWave-KDH-Flasher.exe"; Description: "Launch FlintWave KDH Flasher"; Flags: nowait postinstall skipifsilent
+          ISS
+
+      - name: Build installer
+        run: iscc installer.iss
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-packages
+          path: |
+            dist/FlintWave-KDH-Flasher.exe
+            FlintWave-KDH-Flasher-Setup.exe
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyserial requests pyinstaller wxPython --prefer-binary
+          brew install create-dmg
+
+      - name: Build binary
+        run: pyinstaller build.spec
+
+      - name: Build DMG
+        run: |
+          create-dmg \
+            --volname "FlintWave KDH Flasher" \
+            --window-size 500 300 \
+            --icon-size 80 \
+            --icon "FlintWave KDH Flasher.app" 150 150 \
+            --app-drop-link 350 150 \
+            "FlintWave-KDH-Flasher.dmg" \
+            "dist/FlintWave KDH Flasher.app" \
+          || true
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-packages
+          path: |
+            FlintWave-KDH-Flasher.dmg
             dist/
-            *.AppImage
 
   release:
-    needs: build
+    needs: [build-linux, build-windows, build-macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
 
-      - name: Package artifacts
-        shell: bash
-        run: |
-          # Linux AppImage
-          cp FlintWave-KDH-Flasher-Linux/FlintWave-KDH-Flasher-x86_64.AppImage . 2>/dev/null || \
-            (cd FlintWave-KDH-Flasher-Linux/dist && tar czf ../../FlintWave-KDH-Flasher-Linux.tar.gz *)
-          # Windows exe
-          cp FlintWave-KDH-Flasher-Windows/dist/FlintWave-KDH-Flasher.exe . 2>/dev/null || true
-          # macOS
-          cd FlintWave-KDH-Flasher-macOS/dist && tar czf ../../FlintWave-KDH-Flasher-macOS.tar.gz * && cd ../..
+      - name: List artifacts
+        run: find . -type f -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.exe" -o -name "*.dmg" | sort
 
       - name: Create GitHub Release
         env:
@@ -106,10 +198,16 @@ jobs:
         shell: bash
         run: |
           ASSETS=""
-          [ -f FlintWave-KDH-Flasher-x86_64.AppImage ] && ASSETS="$ASSETS FlintWave-KDH-Flasher-x86_64.AppImage"
-          [ -f FlintWave-KDH-Flasher-Linux.tar.gz ] && ASSETS="$ASSETS FlintWave-KDH-Flasher-Linux.tar.gz"
-          [ -f FlintWave-KDH-Flasher.exe ] && ASSETS="$ASSETS FlintWave-KDH-Flasher.exe"
-          [ -f FlintWave-KDH-Flasher-macOS.tar.gz ] && ASSETS="$ASSETS FlintWave-KDH-Flasher-macOS.tar.gz"
+          for f in \
+            linux-packages/FlintWave-KDH-Flasher-x86_64.AppImage \
+            linux-packages/*.deb \
+            linux-packages/*.rpm \
+            windows-packages/FlintWave-KDH-Flasher-Setup.exe \
+            windows-packages/dist/FlintWave-KDH-Flasher.exe \
+            macos-packages/FlintWave-KDH-Flasher.dmg \
+          ; do
+            [ -f "$f" ] && ASSETS="$ASSETS $f"
+          done
           gh release create "$TAG_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --title "$TAG_NAME" \

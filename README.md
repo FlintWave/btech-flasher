@@ -13,17 +13,23 @@ Maintained by [FlintWave Radio Tools](https://github.com/FlintWave). Contact: fl
 
 ## Download
 
-### Standalone downloads (no Python needed)
+### Installers (recommended)
 
-Download the latest release for your OS from [GitHub Releases](../../releases/latest):
+Download from [GitHub Releases](../../releases/latest):
+
+| OS | Installer | What it does |
+|----|-----------|-------------|
+| Linux (Debian/Ubuntu/Pop!_OS/Mint) | `.deb` | `sudo dpkg -i *.deb` — adds to app launcher |
+| Linux (Fedora/RHEL/openSUSE) | `.rpm` | `sudo rpm -i *.rpm` — adds to app launcher |
+| Windows | `FlintWave-KDH-Flasher-Setup.exe` | Installer with Start Menu + desktop shortcut |
+| macOS | `.dmg` | Drag to Applications |
+
+### Portable (no install)
 
 | OS | File | How to run |
 |----|------|-----------|
-| Linux | `FlintWave-KDH-Flasher-x86_64.AppImage` | `chmod +x` and double-click, or run from terminal |
+| Linux | `.AppImage` | `chmod +x` and double-click |
 | Windows | `FlintWave-KDH-Flasher.exe` | Double-click to run |
-| macOS | `FlintWave-KDH-Flasher-macOS.tar.gz` | Extract and open the app |
-
-No installation required — just download and run.
 
 ### Install from source
 
