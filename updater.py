@@ -37,6 +37,14 @@ def is_frozen():
 
 def get_local_version():
     """Get the VERSION string from the running code."""
+    # In frozen (PyInstaller) builds, import the version directly
+    # since source files aren't on disk.
+    try:
+        from gui_main import VERSION
+        return VERSION
+    except Exception:
+        pass
+    # Fallback: read from source file (git installs)
     try:
         gui_path = os.path.join(REPO_DIR, "flash_firmware_gui.py")
         if os.path.exists(gui_path):
