@@ -512,5 +512,190 @@ class TestThemePalettes(unittest.TestCase):
                           f"Theme {theme} not found in GUI code")
 
 
+class TestFirmwareVersion(unittest.TestCase):
+    """Tests for firmware_version.py."""
+
+    def test_parse_simple_version(self):
+        import firmware_version as fv
+        self.assertEqual(fv.parse_version("0.53"), (0, 53, 0))
+
+    def test_parse_version_with_prefix(self):
+        import firmware_version as fv
+        self.assertEqual(fv.parse_version("V0.53"), (0, 53, 0))
+        self.assertEqual(fv.parse_version("v0.53"), (0, 53, 0))
+
+    def test_parse_version_with_alpha(self):
+        import firmware_version as fv
+        self.assertEqual(fv.parse_version("1.27a"), (1, 27, 1))
+
+    def test_parse_version_uppercase_alpha(self):
+        import firmware_version as fv
+        self.assertEqual(fv.parse_version("V2.13A"), (2, 13, 1))
+
+    def test_parse_none_returns_zero(self):
+        import firmware_version as fv
+        self.assertEqual(fv.parse_version(None), (0, 0, 0))
+        self.assertEqual(fv.parse_version(""), (0, 0, 0))
+        self.assertEqual(fv.parse_version("garbage"), (0, 0, 0))
+
+    def test_compare_equal(self):
+        import firmware_version as fv
+        self.assertEqual(fv.compare_versions("0.53", "0.53"), 0)
+
+    def test_compare_newer(self):
+        import firmware_version as fv
+        self.assertEqual(fv.compare_versions("0.54", "0.53"), 1)
+
+    def test_compare_older(self):
+        import firmware_version as fv
+        self.assertEqual(fv.compare_versions("0.52", "0.53"), -1)
+
+    def test_compare_alpha_ordering(self):
+        import firmware_version as fv
+        self.assertTrue(fv.is_newer("1.27b", "1.27a"))
+        self.assertTrue(fv.is_newer("1.27a", "1.27"))
+        self.assertFalse(fv.is_newer("1.27", "1.27a"))
+
+    def test_compare_major_minor(self):
+        import firmware_version as fv
+        self.assertTrue(fv.is_newer("2.13A", "1.27a"))
+        self.assertFalse(fv.is_newer("0.53", "1.03"))
+
+    def test_extract_from_btech_filename(self):
+        import firmware_version as fv
+        self.assertEqual(fv.extract_version_from_filename("BTECH_V0.53_260116.kdhx"), "0.53")
+
+    def test_extract_from_uv25_filename(self):
+        import firmware_version as fv
+        self.assertEqual(fv.extract_version_from_filename("UV25Pro_NRF_401+_V0.20_250217.kdhx"), "0.20")
+
+    def test_extract_from_radtel_filename(self):
+        import firmware_version as fv
+        self.assertEqual(fv.extract_version_from_filename("RT-470_2.13A.rar"), "2.13A")
+        self.assertEqual(fv.extract_version_from_filename("1.27a_firmware_240523.rar"), "1.27a")
+
+    def test_extract_from_version_in_name(self):
+        import firmware_version as fv
+        self.assertEqual(fv.extract_version_from_filename("Firmware_Version_1.03.zip"), "1.03")
+
+    def test_extract_from_unknown_filename(self):
+        import firmware_version as fv
+        self.assertIsNone(fv.extract_version_from_filename("random.kdhx"))
+        self.assertIsNone(fv.extract_version_from_filename(None))
+
+
+class TestFirmwareManifest(unittest.TestCase):
+    """Tests for firmware_manifest.py state management."""
+
+    def setUp(self):
+        self._orig_state_file = None
+
+    def _use_temp_state(self):
+        import firmware_manifest as fm_mod
+        self._orig_state_file = fm_mod.STATE_FILE
+        self._tmpdir = tempfile.mkdtemp()
+        fm_mod.STATE_FILE = os.path.join(self._tmpdir, "state.json")
+        fm_mod.STATE_DIR = self._tmpdir
+        return fm_mod
+
+    def tearDown(self):
+        if self._orig_state_file:
+            import firmware_manifest as fm_mod
+            fm_mod.STATE_FILE = self._orig_state_file
+            import shutil
+            shutil.rmtree(self._tmpdir, ignore_errors=True)
+
+    def test_load_state_missing_file(self):
+        fm_mod = self._use_temp_state()
+        self.assertEqual(fm_mod._load_state(), {})
+
+    def test_save_and_load_roundtrip(self):
+        fm_mod = self._use_temp_state()
+        data = {"test_key": "test_value", "nested": {"a": 1}}
+        fm_mod._save_state(data)
+        loaded = fm_mod._load_state()
+        self.assertEqual(loaded, data)
+
+    def test_record_flash_creates_entry(self):
+        fm_mod = self._use_temp_state()
+        fm_mod.record_flash("bf-f8hp-pro", "0.53", "abc123")
+        last = fm_mod.get_last_flashed("bf-f8hp-pro")
+        self.assertIsNotNone(last)
+        self.assertEqual(last["version"], "0.53")
+        self.assertEqual(last["firmware_sha256"], "abc123")
+        self.assertIn("timestamp", last)
+
+    def test_get_last_flashed_unknown_radio(self):
+        fm_mod = self._use_temp_state()
+        self.assertIsNone(fm_mod.get_last_flashed("nonexistent"))
+
+    def test_record_flash_overwrites(self):
+        fm_mod = self._use_temp_state()
+        fm_mod.record_flash("test-radio", "1.0", "hash1")
+        fm_mod.record_flash("test-radio", "2.0", "hash2")
+        last = fm_mod.get_last_flashed("test-radio")
+        self.assertEqual(last["version"], "2.0")
+
+    def test_get_radio_firmware_info_with_manifest(self):
+        import firmware_manifest as fm_mod
+        manifest = {
+            "bf-f8hp-pro": {
+                "firmware_version": "0.53",
+                "firmware_url": "https://example.com/fw.zip",
+            }
+        }
+        info = fm_mod.get_radio_firmware_info("bf-f8hp-pro", manifest)
+        self.assertEqual(info["firmware_version"], "0.53")
+
+    def test_get_radio_firmware_info_missing(self):
+        import firmware_manifest as fm_mod
+        self.assertIsNone(fm_mod.get_radio_firmware_info("nope", {}))
+        self.assertIsNone(fm_mod.get_radio_firmware_info("nope", None))
+
+
+class TestManifestSchema(unittest.TestCase):
+    """Validate firmware_manifest.json structure."""
+
+    def setUp(self):
+        manifest_path = os.path.join(os.path.dirname(__file__), "firmware_manifest.json")
+        with open(manifest_path) as f:
+            self.manifest = json.load(f)
+        radios_path = os.path.join(os.path.dirname(__file__), "radios.json")
+        with open(radios_path) as f:
+            self.radios = json.load(f)["radios"]
+
+    def test_manifest_has_version(self):
+        self.assertIn("manifest_version", self.manifest)
+        self.assertIsInstance(self.manifest["manifest_version"], int)
+
+    def test_manifest_covers_specific_radios(self):
+        """Every non-generic radio in radios.json should be in the manifest."""
+        manifest_ids = set(self.manifest["radios"].keys())
+        for radio in self.radios:
+            if radio["id"] == "generic":
+                continue
+            self.assertIn(radio["id"], manifest_ids,
+                          f"Radio {radio['id']} missing from manifest")
+
+    def test_manifest_urls_are_valid(self):
+        import firmware_download as dl
+        for radio_id, info in self.manifest["radios"].items():
+            url = info.get("firmware_url")
+            if url:
+                try:
+                    dl.validate_url(url)
+                except ValueError as e:
+                    self.fail(f"Radio {radio_id} has invalid URL: {e}")
+
+    def test_manifest_versions_are_parseable(self):
+        import firmware_version as fv_mod
+        for radio_id, info in self.manifest["radios"].items():
+            ver = info.get("firmware_version")
+            if ver:
+                parsed = fv_mod.parse_version(ver)
+                self.assertNotEqual(parsed, (0, 0, 0),
+                                    f"Radio {radio_id} version '{ver}' did not parse")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

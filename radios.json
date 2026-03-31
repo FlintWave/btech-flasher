@@ -19,91 +19,52 @@
       "name": "Baofeng UV-25 Plus / UV-25 Pro",
       "manufacturer": "Baofeng",
       "model_type": "BF2",
-      "firmware_url": null,
+      "firmware_url": "https://baofeng.s3.amazonaws.com/Baofeng_UV-25_Plus_Firware_Update_Guide_20250526.zip",
       "firmware_page": "https://www.baofengradio.com/blogs/news/how-to-update-uv-25-plus-firmware",
       "firmware_filename_pattern": "UV25Pro_*.kdhx",
-      "bootloader_keys": "SK2 + SK3",
+      "bootloader_keys": "SK2 + SK3 (two buttons below PTT)",
       "connector": "K1 Kenwood 2-pin",
       "tested": false,
-      "notes": "Uses same KDH bootloader. Firmware available from baofengradio.com."
-    },
-    {
-      "id": "uv-17-pro",
-      "name": "Baofeng UV-17 Pro",
-      "manufacturer": "Baofeng",
-      "model_type": "BFH",
-      "firmware_url": null,
-      "firmware_page": null,
-      "firmware_filename_pattern": "*.kdhx",
-      "bootloader_keys": "Unknown — check manual",
-      "connector": "K1 Kenwood 2-pin",
-      "tested": false,
-      "notes": "AT32F415 MCU. KDH bootloader confirmed via community reverse engineering."
-    },
-    {
-      "id": "uv-18-pro",
-      "name": "Baofeng UV-18 Pro",
-      "manufacturer": "Baofeng",
-      "model_type": "BFH",
-      "firmware_url": null,
-      "firmware_page": null,
-      "firmware_filename_pattern": "*.kdhx",
-      "bootloader_keys": "Unknown — check manual",
-      "connector": "K1 Kenwood 2-pin",
-      "tested": false,
-      "notes": "KD32F401RBT6 MCU. KDH bootloader confirmed."
-    },
-    {
-      "id": "uv-21-pro",
-      "name": "Baofeng UV-21 Pro",
-      "manufacturer": "Baofeng",
-      "model_type": "BFH",
-      "firmware_url": null,
-      "firmware_page": null,
-      "firmware_filename_pattern": "*.kdhx",
-      "bootloader_keys": "Unknown — check manual",
-      "connector": "K1 Kenwood 2-pin",
-      "tested": false,
-      "notes": "KDH bootloader confirmed. Related to UV-19, UV-20, UV-22 Pro."
+      "notes": "Uses same KDH bootloader. Firmware available from baofengradio.com. Do not use if your UV-25 does not have GPS — it will cause the radio to malfunction."
     },
     {
       "id": "rt-470",
       "name": "Radtel RT-470",
       "manufacturer": "Radtel",
       "model_type": "WLT",
-      "firmware_url": null,
+      "firmware_url": "https://cdn.shopifycdn.net/s/files/1/0564/8855/8800/files/RT-470_2.13A.rar",
       "firmware_page": "https://www.radtels.com/pages/software-download",
       "firmware_filename_pattern": "*.kdhx",
       "bootloader_keys": "Unknown — check manual",
       "connector": "K1 Kenwood 2-pin",
       "tested": false,
-      "notes": "Uses WLT2000 CPS. KDH bootloader with .kdhx firmware."
+      "notes": "Uses WLT2000 CPS. KDH bootloader with .kdhx firmware. This URL is for the NEW PCB (V2.13A). Old PCB (10W) uses different firmware — see radtels.com."
     },
     {
       "id": "rt-490",
       "name": "Radtel RT-490",
       "manufacturer": "Radtel",
       "model_type": "WLT",
-      "firmware_url": null,
+      "firmware_url": "https://cdn.shopify.com/s/files/1/0564/8855/8800/files/Firmware_Version_1.03.zip",
       "firmware_page": "https://www.radtels.com/pages/software-download",
       "firmware_filename_pattern": "*.kdhx",
       "bootloader_keys": "Unknown — check manual",
       "connector": "K1 Kenwood 2-pin",
       "tested": false,
-      "notes": "Shares JJCC JC-8629 PCB. KDH bootloader."
+      "notes": "Shares JJCC JC-8629 PCB. KDH bootloader. This URL is for the old PCB (v1.03). Newer PCB versions with channel name editing available on radtels.com."
     },
     {
-      "id": "jc-8629",
-      "name": "JC-8629",
-      "manufacturer": "JJCC",
-      "model_type": "JJCC",
+      "id": "generic",
+      "name": "Other KDH Radio",
+      "manufacturer": "Generic",
+      "model_type": "KDH",
       "firmware_url": null,
       "firmware_page": null,
       "firmware_filename_pattern": "*.kdhx",
-      "bootloader_keys": "Unknown — check manual",
+      "bootloader_keys": "Check your radio's manual for bootloader key combination",
       "connector": "K1 Kenwood 2-pin",
       "tested": false,
-      "notes": "Reference PCB design used by many clones (Abbree AR-869, Hamgeek HG-590, Socotran FB-8629, etc.)"
+      "notes": "Generic option for any radio using the KDH bootloader. Browse for a .kdhx firmware file you have downloaded from your manufacturer. Many radios based on KeDiHeng designs (Abbree, Hamgeek, Socotran, JJCC, etc.) use this bootloader."
     }
   ]
 }

@@ -69,15 +69,17 @@ py -m pip install pyserial wxPython requests
 
 ### Step 1: Select your radio
 
-Use the **Radio** dropdown at the top of the window. The info line below shows the bootloader key combination and connector type for your model.
+Use the **Radio** dropdown at the top of the window. The info line below shows the bootloader key combination, connector type, and latest firmware version (if known) for your model.
+
+If your radio isn't listed, select **"Other KDH Radio"** — it works with any radio that uses the KDH bootloader. You'll need to browse for a `.kdhx` firmware file manually.
 
 ### Step 2: Get the firmware file
 
 **Option A — Automatic download:**
-If the "Download Latest" button is enabled, click it. The tool downloads the firmware bundle from the manufacturer's website, extracts the `.kdhx` file, and fills in the path automatically.
+Click **"Download vX.XX"** (or "Download Latest") if the button is enabled. The tool downloads the firmware bundle from the manufacturer's website, extracts the `.kdhx` file, and fills in the path automatically. The app checks a remote manifest for the latest known firmware URLs, so this may work even if you haven't updated the app recently.
 
 **Option B — Manual download:**
-Visit your radio manufacturer's website, download the firmware bundle (usually a `.zip`), extract it, and click **Browse...** to select the `.kdhx` file.
+Visit your radio manufacturer's website, download the firmware bundle (usually a `.zip` or `.rar`), extract it, and click **Browse...** to select the `.kdhx` file. For `.rar` archives, the app can extract them automatically if `unrar` or `7z` is installed.
 
 ### Step 3: Connect your programming cable
 
@@ -120,12 +122,24 @@ With the radio in bootloader mode (see below), click **Run Diagnostics** to test
 
 5. After flashing, you'll be offered the option to submit a test report. This helps us track which radios have been verified.
 
+## Firmware Version Checking
+
+The app tracks firmware versions to help you avoid accidental same-version or downgrade flashes:
+
+- **Latest version display:** When you select a radio, the info line shows the latest known firmware version (fetched from the remote manifest on GitHub).
+- **Same-version warning:** If you try to flash the same version you last flashed, you'll get a confirmation prompt.
+- **Downgrade warning:** If you try to flash an older version than what was last flashed, you'll see a warning.
+- **Post-flash log:** After a successful flash, the log shows whether you're on the latest version.
+
+Version information is parsed from firmware filenames (e.g., `BTECH_V0.53_260116.kdhx` is version 0.53). The KDH bootloader protocol does not support reading the current firmware version from the radio, so version tracking relies on what this tool has flashed.
+
 ## Bootloader Mode Quick Reference
 
 | Radio | Keys to Hold |
 |-------|-------------|
 | BTECH BF-F8HP Pro | SK1 (top) + SK2 (bottom) — not PTT. Volume to max. Hold cable firmly. |
-| Baofeng UV-25 Plus/Pro | SK2 + SK3 |
+| Baofeng UV-25 Plus/Pro | SK2 + SK3 (two buttons below PTT) |
+| Radtel RT-470 / RT-490 | Check your radio's manual |
 | Others | Check your radio's manual or `radios.json` |
 
 **Important:** The side keys are the small buttons above and below the large PTT button. Do not hold PTT itself.
@@ -223,3 +237,20 @@ Edit `radios.json` to add your radio:
 ```
 
 Submit a PR to share your addition with the community.
+
+## Updating Firmware URLs
+
+Found a new firmware version for a supported radio? You can update `firmware_manifest.json` and submit a PR. The app fetches this file from GitHub at runtime, so users get the update without needing a new app version.
+
+```json
+{
+  "your-radio-id": {
+    "firmware_version": "1.23",
+    "firmware_url": "https://manufacturer.com/firmware-v1.23.zip",
+    "firmware_sha256": null,
+    "release_notes": "V1.23: brief description of changes"
+  }
+}
+```
+
+The `firmware_url` must be HTTPS and from an allowed domain (see `ALLOWED_DOMAINS` in `firmware_download.py`). If you need a new domain added, note it in your PR.

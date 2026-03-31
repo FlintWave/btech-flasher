@@ -1,0 +1,31 @@
+{
+  "_comment": "Remote firmware manifest. Update this file to publish new firmware URLs without requiring an app update. Community contributions welcome — submit a PR.",
+  "_updated": "2026-03-31",
+  "manifest_version": 1,
+  "radios": {
+    "bf-f8hp-pro": {
+      "firmware_version": "0.53",
+      "firmware_url": "https://baofengtech.com/wp-content/uploads/2026/01/F8HPPRO-V53-Update-Bundle.zip",
+      "firmware_sha256": null,
+      "release_notes": "V0.53: smarter scanning, better airband, more control"
+    },
+    "uv-25-pro": {
+      "firmware_version": "0.20",
+      "firmware_url": "https://baofeng.s3.amazonaws.com/Baofeng_UV-25_Plus_Firware_Update_Guide_20250526.zip",
+      "firmware_sha256": null,
+      "release_notes": "V0.20: fixed GPS radar distance display after location sharing"
+    },
+    "rt-470": {
+      "firmware_version": "2.13A",
+      "firmware_url": "https://cdn.shopifycdn.net/s/files/1/0564/8855/8800/files/RT-470_2.13A.rar",
+      "firmware_sha256": null,
+      "release_notes": "V2.13A: new PCB, full band + 8.33kHz airband spacing"
+    },
+    "rt-490": {
+      "firmware_version": "1.03",
+      "firmware_url": "https://cdn.shopify.com/s/files/1/0564/8855/8800/files/Firmware_Version_1.03.zip",
+      "firmware_sha256": null,
+      "release_notes": "V1.03: old PCB firmware"
+    }
+  }
+}

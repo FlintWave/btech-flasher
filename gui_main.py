@@ -13,6 +13,8 @@ import wx.adv
 
 import flash_firmware as fw
 import firmware_download as dl
+import firmware_manifest as fm
+import firmware_version as fv
 import updater
 import serial
 
@@ -190,11 +192,15 @@ class FlasherFrame(wx.Frame):
             "during the flash process.\n"
         )
 
+        # Manifest state
+        self.manifest = None
+
         # Auto-detect cable on startup
         self._auto_detect_port()
 
-        # Check for updates in background
+        # Check for updates and fetch manifest in background
         threading.Thread(target=self._check_update, daemon=True).start()
+        threading.Thread(target=self._fetch_manifest, daemon=True).start()
 
     def _auto_detect_port(self):
         ports = list_serial_ports()
@@ -237,6 +243,13 @@ class FlasherFrame(wx.Frame):
 
     def on_about(self, event):
         show_about_dialog(self)
+
+    def _fetch_manifest(self):
+        try:
+            self.manifest = fm.fetch_manifest()
+            wx.CallAfter(self._update_radio_info)
+        except Exception:
+            pass
 
     def _check_update(self):
         try:
@@ -284,16 +297,37 @@ class FlasherFrame(wx.Frame):
             return self.radios[idx]
         return None
 
+    def _get_firmware_url_and_version(self, radio):
+        """Get the best firmware URL and version for a radio.
+
+        Checks manifest first (may have newer URL), falls back to radios.json.
+        Returns (url, version) where either may be None.
+        """
+        manifest_info = fm.get_radio_firmware_info(radio["id"], self.manifest)
+        manifest_url = manifest_info.get("firmware_url") if manifest_info else None
+        manifest_ver = manifest_info.get("firmware_version") if manifest_info else None
+
+        url = manifest_url or radio.get("firmware_url")
+        version = manifest_ver
+        return url, version
+
     def _update_radio_info(self):
         radio = self._get_selected_radio()
         if radio:
             tested = "Tested" if radio.get("tested") else "Untested"
             info = f"Bootloader: {radio['bootloader_keys']}  |  Connector: {radio['connector']}  |  {tested}"
+
+            url, version = self._get_firmware_url_and_version(radio)
+            if version:
+                info += f"  |  Latest FW: v{version}"
+
             self.radio_info.SetLabel(info)
-            has_url = bool(radio.get("firmware_url"))
+            has_url = bool(url)
             self.download_btn.Enable(has_url)
             if not has_url:
                 self.download_btn.SetLabel("No Direct URL")
+            elif version:
+                self.download_btn.SetLabel(f"Download v{version}")
             else:
                 self.download_btn.SetLabel("Download Latest")
 
@@ -317,22 +351,27 @@ class FlasherFrame(wx.Frame):
                 return
             dlg.Destroy()
 
+        url, _ = self._get_firmware_url_and_version(radio)
+
         self.log.Clear()
         self.progress.SetValue(0)
         self.set_buttons(False)
-        threading.Thread(target=self._download_thread, args=(radio,), daemon=True).start()
+        threading.Thread(target=self._download_thread, args=(radio, url), daemon=True).start()
 
-    def _download_thread(self, radio):
+    def _download_thread(self, radio, url=None):
         try:
             self.log_msg(f"Downloading firmware for {radio['name']}...")
-            self.log_msg(f"URL: {radio['firmware_url']}")
+            self.log_msg(f"URL: {url or radio.get('firmware_url', 'N/A')}")
             self.log_msg("")
 
             def on_progress(pct):
                 self.set_progress(pct * 0.8)  # 80% for download
 
+            # Use url as override if it differs from the hardcoded one
+            url_override = url if url != radio.get("firmware_url") else None
             kdhx_path, _ = dl.download_and_extract(
-                radio["id"], progress_callback=on_progress
+                radio["id"], progress_callback=on_progress,
+                url_override=url_override,
             )
 
             self.set_progress(100)
@@ -416,6 +455,30 @@ class FlasherFrame(wx.Frame):
                 "The protocol should be compatible, but proceed with caution.\n\n"
             )
 
+        # Check if same version was already flashed
+        file_version = fv.extract_version_from_filename(os.path.basename(firmware_path))
+        if radio and file_version:
+            last = fm.get_last_flashed(radio["id"])
+            if last and last.get("version") == file_version:
+                same_dlg = wx.MessageDialog(self,
+                    f"You already flashed v{file_version} to this radio.\n\n"
+                    "Flash the same version again?",
+                    "Same Version", wx.YES_NO | wx.ICON_QUESTION)
+                if same_dlg.ShowModal() != wx.ID_YES:
+                    same_dlg.Destroy()
+                    return
+                same_dlg.Destroy()
+            elif last and last.get("version") and fv.compare_versions(file_version, last["version"]) < 0:
+                older_dlg = wx.MessageDialog(self,
+                    f"This firmware (v{file_version}) is older than what was\n"
+                    f"last flashed (v{last['version']}).\n\n"
+                    "Flash an older version?",
+                    "Older Version", wx.YES_NO | wx.ICON_WARNING)
+                if older_dlg.ShowModal() != wx.ID_YES:
+                    older_dlg.Destroy()
+                    return
+                older_dlg.Destroy()
+
         dlg = wx.MessageDialog(self,
             f"{warning}"
             f"Make sure the {radio_name} is in bootloader mode:\n\n"
@@ -497,6 +560,24 @@ class FlasherFrame(wx.Frame):
             self.log_msg("")
             self.log_msg("Firmware update complete!")
             self.log_msg("Power cycle the radio and check Menu > Radio Info.")
+
+            # Record flash version
+            file_version = fv.extract_version_from_filename(os.path.basename(firmware_path))
+            if radio and file_version:
+                try:
+                    fm.record_flash(radio["id"], file_version, sha256)
+                    self.log_msg(f"Recorded: v{file_version} flashed to {radio_name}")
+                except Exception:
+                    pass
+                # Compare against latest known
+                _, latest_ver = self._get_firmware_url_and_version(radio)
+                if latest_ver and file_version:
+                    cmp = fv.compare_versions(file_version, latest_ver)
+                    if cmp == 0:
+                        self.log_msg(f"Firmware v{file_version} is the latest available.")
+                    elif cmp < 0:
+                        self.log_msg(f"Note: v{latest_ver} is available (you flashed v{file_version}).")
+
             wx.CallAfter(self._offer_test_report, radio_name, firmware_path, True, "")
 
         except Exception as e:

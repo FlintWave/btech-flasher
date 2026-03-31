@@ -25,6 +25,8 @@ a = Analysis(
     hiddenimports=[
         'flash_firmware',
         'firmware_download',
+        'firmware_manifest',
+        'firmware_version',
         'updater',
         'gui_main',
         'gui_dialogs',

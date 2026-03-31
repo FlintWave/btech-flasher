@@ -8,6 +8,8 @@ import json
 import os
 import re
 import fnmatch
+import shutil
+import subprocess
 import zipfile
 import tempfile
 from pathlib import Path
@@ -23,8 +25,11 @@ ALLOWED_DOMAINS = {
     "www.baofengtech.com",
     "baofengradio.com",
     "www.baofengradio.com",
+    "baofeng.s3.amazonaws.com",
     "www.radtels.com",
     "radtels.com",
+    "cdn.shopify.com",
+    "cdn.shopifycdn.net",
 }
 
 RADIOS_FILE = os.path.join(os.path.dirname(__file__), "radios.json")
@@ -61,9 +66,9 @@ def validate_url(url):
 
 
 def download_firmware_bundle(url, progress_callback=None):
-    """Download a firmware bundle ZIP from a manufacturer URL.
+    """Download a firmware bundle from a manufacturer URL.
 
-    Returns the path to the downloaded file.
+    Supports ZIP and RAR archives. Returns the path to the downloaded file.
     """
     validate_url(url)
 
@@ -72,7 +77,7 @@ def download_firmware_bundle(url, progress_callback=None):
     # Derive filename from URL
     parsed = urlparse(url)
     filename = os.path.basename(parsed.path)
-    if not filename or not filename.endswith(".zip"):
+    if not filename or not any(filename.endswith(ext) for ext in (".zip", ".rar")):
         filename = "firmware-bundle.zip"
     # Sanitize filename
     filename = re.sub(r'[^\w\-.]', '_', filename)
@@ -103,11 +108,18 @@ def download_firmware_bundle(url, progress_callback=None):
     return dest
 
 
-def extract_kdhx(zip_path, pattern="*.kdhx"):
-    """Extract .kdhx files from a firmware bundle ZIP.
+def extract_kdhx(archive_path, pattern="*.kdhx"):
+    """Extract .kdhx files from a firmware bundle (ZIP or RAR).
 
     Returns list of extracted file paths.
     """
+    if archive_path.lower().endswith(".rar"):
+        return _extract_kdhx_from_rar(archive_path, pattern)
+    return _extract_kdhx_from_zip(archive_path, pattern)
+
+
+def _extract_kdhx_from_zip(zip_path, pattern="*.kdhx"):
+    """Extract .kdhx files from a ZIP archive."""
     extracted = []
     extract_dir = os.path.dirname(zip_path)
 
@@ -120,7 +132,6 @@ def extract_kdhx(zip_path, pattern="*.kdhx"):
             if fnmatch.fnmatch(basename, pattern):
                 # Extract to flat directory (no nested paths)
                 dest = os.path.join(extract_dir, basename)
-                import shutil
                 with zf.open(name) as src, open(dest, "wb") as dst:
                     shutil.copyfileobj(src, dst, length=65536)
                 extracted.append(dest)
@@ -128,16 +139,53 @@ def extract_kdhx(zip_path, pattern="*.kdhx"):
     return extracted
 
 
-def download_and_extract(radio_id, progress_callback=None):
+def _extract_kdhx_from_rar(rar_path, pattern="*.kdhx"):
+    """Extract .kdhx files from a RAR archive using unrar or 7z."""
+    extract_dir = os.path.dirname(rar_path)
+
+    # Try unrar first, then 7z
+    for tool, args in [
+        ("unrar", ["unrar", "e", "-o+", rar_path, extract_dir + "/"]),
+        ("7z", ["7z", "e", f"-o{extract_dir}", "-y", rar_path]),
+    ]:
+        try:
+            result = subprocess.run(
+                args, capture_output=True, timeout=30,
+            )
+            if result.returncode == 0:
+                break
+        except FileNotFoundError:
+            continue
+    else:
+        raise RuntimeError(
+            "Cannot extract RAR archive. Install 'unrar' or 'p7zip':\n"
+            "  Linux:   sudo apt install unrar  (or p7zip-full)\n"
+            "  macOS:   brew install unrar  (or p7zip)\n"
+            "  Windows: install 7-Zip from https://7-zip.org"
+        )
+
+    # Find extracted .kdhx files
+    extracted = []
+    for name in os.listdir(extract_dir):
+        if name.startswith(".") or name.startswith("__"):
+            continue
+        if fnmatch.fnmatch(name, pattern):
+            extracted.append(os.path.join(extract_dir, name))
+
+    return extracted
+
+
+def download_and_extract(radio_id, progress_callback=None, url_override=None):
     """Download firmware for a radio and extract the .kdhx file.
 
+    If url_override is provided, it takes precedence over radios.json.
     Returns (kdhx_path, radio_info) or raises on error.
     """
     radio = get_radio_by_id(radio_id)
     if not radio:
         raise ValueError(f"Unknown radio: {radio_id}")
 
-    url = radio.get("firmware_url")
+    url = url_override or radio.get("firmware_url")
     if not url:
         page = radio.get("firmware_page", "the manufacturer's website")
         raise ValueError(

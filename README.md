@@ -83,24 +83,25 @@ Or download and run `install.bat` for an automated setup.
 
 ## Supported Radios
 
-| Radio | Manufacturer | Tested |
-|-------|-------------|--------|
-| BF-F8HP Pro | BTECH | Yes |
-| UV-25 Plus / UV-25 Pro | Baofeng | No |
-| UV-17 Pro | Baofeng | No |
-| UV-18 Pro | Baofeng | No |
-| UV-21 Pro | Baofeng | No |
-| RT-470 | Radtel | No |
-| RT-490 | Radtel | No |
-| JC-8629 | JJCC | No |
+| Radio | Manufacturer | Firmware Download | Tested |
+|-------|-------------|-------------------|--------|
+| BF-F8HP Pro | BTECH | Automatic | Yes |
+| UV-25 Plus / UV-25 Pro | Baofeng | Automatic | No |
+| RT-470 | Radtel | Automatic | No |
+| RT-490 | Radtel | Automatic | No |
+| Other KDH Radio | Generic | Manual (browse) | — |
 
-Radio definitions live in `radios.json` — community contributions welcome via PR.
+The "Other KDH Radio" option works with any radio that uses the KDH bootloader — browse for a `.kdhx` file and flash it. Many radios from Abbree, Hamgeek, Socotran, JJCC, and other manufacturers use this bootloader.
+
+Radio definitions live in `radios.json`. Firmware URLs are also tracked in `firmware_manifest.json`, which is fetched at runtime from GitHub — new firmware URLs can be published via PR without an app update.
 
 ## Features
 
 - **GUI and CLI** interfaces
 - **Radio selector** with per-model bootloader instructions
-- **Firmware download** from manufacturer websites
+- **Firmware download** from manufacturer websites with version tracking
+- **Remote firmware manifest** — new firmware URLs published without app updates
+- **Version comparison** — warns before flashing same or older firmware
 - **Port finder wizard** with auto-detection of FTDI PC03 cables
 - **Dry run mode** — verify firmware files without touching the radio
 - **Serial diagnostics** — test cable and radio communication
@@ -165,6 +166,7 @@ CRC-16/CCITT (poly 0x1021, init 0x0000) over cmd+seed+len+data.
 
 - **Test reports** — flash your radio and submit a report (the app offers this after flashing)
 - **New radios** — add your radio to `radios.json` and submit a PR
+- **Firmware URLs** — found a new firmware version? Update `firmware_manifest.json` and submit a PR. The app fetches this file at runtime, so users get the new URL immediately
 - **Bug fixes** — always welcome
 
 ## License
