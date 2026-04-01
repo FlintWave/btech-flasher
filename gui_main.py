@@ -109,6 +109,9 @@ class FlasherFrame(wx.Frame):
         radio_sizer.Add(self.download_btn, 0)
         sizer.Add(radio_sizer, 0, wx.EXPAND | wx.ALL, 10)
 
+        # Manifest state (must be set before _update_radio_info)
+        self.manifest = None
+
         # Radio info
         self.radio_info = wx.StaticText(panel, label="")
         self.radio_info.SetForegroundColour(wx.Colour(80, 80, 80))
@@ -191,9 +194,6 @@ class FlasherFrame(wx.Frame):
             "IMPORTANT: Do not unplug the cable or turn off the radio\n"
             "during the flash process.\n"
         )
-
-        # Manifest state
-        self.manifest = None
 
         # Auto-detect cable on startup
         self._auto_detect_port()
