@@ -16,7 +16,7 @@ from gui_main import main, FlasherFrame  # noqa: F401
 # Canonical version — kept here so tests and build tooling can find it
 # by reading this file.  gui_main.py and gui_dialogs.py import their own
 # copy; keep them in sync when bumping.
-VERSION = "26.03.9"
+VERSION = "26.04.1"
 
 # Theme names available in the application (used by gui_themes.py):
 #   "latte", "frappe", "macchiato", "mocha", "high_contrast"
