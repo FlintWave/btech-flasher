@@ -59,6 +59,7 @@ jobs:
             --license MIT \
             --category utils \
             --depends libgtk-3-0 \
+            --depends unrar \
             dist/FlintWave-KDH-Flasher=/usr/bin/FlintWave-KDH-Flasher \
             AppDir/flintwave-kdh-flasher.desktop=/usr/share/applications/flintwave-kdh-flasher.desktop \
             icon_128.png=/usr/share/icons/hicolor/128x128/apps/flintwave-kdh-flasher.png
@@ -74,6 +75,7 @@ jobs:
             --license MIT \
             --category Utilities \
             --depends gtk3 \
+            --depends unrar \
             dist/FlintWave-KDH-Flasher=/usr/bin/FlintWave-KDH-Flasher \
             AppDir/flintwave-kdh-flasher.desktop=/usr/share/applications/flintwave-kdh-flasher.desktop \
             icon_128.png=/usr/share/icons/hicolor/128x128/apps/flintwave-kdh-flasher.png
