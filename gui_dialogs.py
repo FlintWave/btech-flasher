@@ -121,7 +121,7 @@ class PortFinderDialog(wx.Dialog):
 
 def show_about_dialog(frame):
     """Show the About dialog with version, links, and license."""
-    VERSION = "26.03.8"
+    VERSION = "26.03.9"
 
     dlg = wx.Dialog(frame, title="About", size=(420, 440),
                     style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
