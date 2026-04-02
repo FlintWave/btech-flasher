@@ -103,12 +103,12 @@ jobs:
           python -m pip install pyserial "requests>=2.33.0" "urllib3>=2.6.3" "certifi>=2024.8.30" rarfile pyinstaller wxPython --prefer-binary
 
       - name: Download UnRAR
-        shell: powershell
+        shell: bash
         run: |
-          Invoke-WebRequest -Uri "https://www.rarlab.com/rar/unrar-command-7.11.0-x64.zip" -OutFile unrar.zip
-          Expand-Archive -Path unrar.zip -DestinationPath unrar_tmp -Force
-          Copy-Item unrar_tmp\UnRAR.exe bundled_unrar.exe
-          Remove-Item -Recurse unrar_tmp, unrar.zip
+          curl -sL https://www.rarlab.com/rar/unrarw64.exe -o unrarw64.exe
+          "/c/Program Files/7-Zip/7z.exe" e unrarw64.exe UnRAR.exe -y
+          mv UnRAR.exe bundled_unrar.exe
+          rm -f unrarw64.exe
 
       - name: Build binary
         run: pyinstaller build.spec
